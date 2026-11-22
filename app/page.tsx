@@ -1,25 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+
+type FormData = {
+  name: string;
+  username: string;
+  email: string;
+  password: string;
+};
+
+type AuthResponse = {
+  message: string;
+  user?: {
+    id: number;
+    name: string;
+    username: string;
+    email: string;
+  };
+};
 
 export default function Home() {
+  const router = useRouter();
   const [register, setRegister] = useState(false);
-  const [form, setForm] = useState({
+
+  const [form, setForm] = useState<FormData>({
     name: "",
     username: "",
     email: "",
     password: ""
   });
+
   const [message, setMessage] = useState("");
 
-  const handleChange = (e) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     setForm({
       ...form,
       [e.target.name]: e.target.value
     });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setMessage("");
 
@@ -35,7 +56,7 @@ export default function Home() {
         }
       );
 
-      const data = await response.json();
+      const data: AuthResponse = await response.json();
       setMessage(data.message);
 
       if (response.ok && register) {
@@ -49,10 +70,7 @@ export default function Home() {
       }
 
       if (response.ok && !register) {
-        // Dashboard akan dibuat pada tahap berikutnya.
-        setMessage(
-          `Selamat datang, ${data.user.name}! Login berhasil.`
-        );
+        router.push("/home");
       }
     } catch {
       setMessage("Tidak dapat terhubung ke server");
@@ -62,7 +80,7 @@ export default function Home() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 p-4">
       <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
-        <h1 className="text-4xl font-bold text-center mb-2 text-purple-600">
+        <h1 className="text-3xl font-extrabold text-center tracking-tight bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent mb-2">
           SocialConnect
         </h1>
 
@@ -85,6 +103,7 @@ export default function Home() {
                 required
                 className="w-full border p-3 rounded-lg text-gray-900"
               />
+
               <input
                 name="username"
                 placeholder="Username"

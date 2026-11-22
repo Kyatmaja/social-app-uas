@@ -1,8 +1,8 @@
 import { prisma } from "../../../lib/prisma";
 import bcrypt from "bcryptjs";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(request) {
+export async function POST(request: NextRequest) {
   try {
     const { name, username, email, password } =
       await request.json();
@@ -53,6 +53,8 @@ export async function POST(request) {
       { status: 201 }
     );
   } catch (error) {
+    console.error("REGISTER ERROR:", error);
+
     return NextResponse.json(
       { message: "Terjadi kesalahan server" },
       { status: 500 }
