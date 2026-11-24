@@ -70,6 +70,7 @@ export default function Home() {
       }
 
       if (response.ok && !register) {
+        localStorage.setItem("user", JSON.stringify(data.user));
         router.push("/home");
       }
     } catch {
