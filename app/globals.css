@@ -1,26 +1,149 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f5fa;
+  --foreground: #202033;
+  --primary: #9333ea;
+  --secondary: #ec4899;
+  --primary-light: #f3e8ff;
+  --card-background: #ffffff;
+  --border-color: #eeeaf4;
+  --text-muted: #64748b;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Global Settings */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
+  margin: 0;
+  min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Links */
+a {
+  text-decoration: none;
+}
+
+/* Buttons */
+button {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Bootstrap Primary Button */
+.btn-primary {
+  background: linear-gradient(
+    135deg,
+    #9333ea,
+    #ec4899
+  );
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-weight: 600;
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  background: linear-gradient(
+    135deg,
+    #7e22ce,
+    #db2777
+  );
+  color: white;
+}
+
+/* Outline Button */
+.btn-outline-primary {
+  color: #9333ea;
+  border-color: #9333ea;
+  border-radius: 10px;
+}
+
+.btn-outline-primary:hover {
+  background: #9333ea;
+  border-color: #9333ea;
+  color: white;
+}
+
+/* Cards */
+.card {
+  background: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+/* Input Fields */
+.form-control,
+.form-select {
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  padding: 12px 15px;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #9333ea;
+  box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.12);
+}
+
+/* Text Selection */
+::selection {
+  background: #e9d5ff;
+  color: #6b21a8;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f6f5fa;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d8b4fe;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9333ea;
+}
+
+/* Responsive Images */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Responsive Mobile */
+@media (max-width: 768px) {
+  .container {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
 }

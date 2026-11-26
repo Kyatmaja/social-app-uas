@@ -13,9 +13,24 @@ export default function MessagesPage() {
     if (data.success) setMessages(data.data);
   };
 
-  useEffect(() => {
-    loadMessages();
-  }, []);
+useEffect(() => {
+  let cancelled = false;
+
+  fetch("/api/messages")
+    .then((res) => res.json())
+    .then((data) => {
+      if (!cancelled && data.success) {
+        setMessages(data.data);
+      }
+    })
+    .catch((error) => {
+      console.error("Error loading messages:", error);
+    });
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();

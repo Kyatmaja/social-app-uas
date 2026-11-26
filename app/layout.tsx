@@ -5,16 +5,27 @@ import Navbar from "./components/Navbar";
 
 export const metadata: Metadata = {
   title: "SocialConnect",
-  description: "Social Media Application",
+  description: "Connect, share, and discover new friends.",
+  applicationName: "SocialConnect",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="id">
-      <body className="bg-light">
+      <body
+        style={{
+          margin: 0,
+          minHeight: "100vh",
+          backgroundColor: "#f6f5fa",
+          fontFamily: "Arial, Helvetica, sans-serif",
+        }}
+      >
         <Navbar />
+
         {children}
       </body>
     </html>
