@@ -1,0 +1,29 @@
+/* Gaya bersama untuk halaman Feed & Konten: create, comments, likes, profile */
+.fc-title {
+  font-weight: 800;
+  background: linear-gradient(120deg, #9333ea, #ec4899);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.fc-avatar {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #9333ea, #ec4899);
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+.fc-avatar-lg {
+  width: 84px;
+  height: 84px;
+  min-width: 84px;
+  font-size: 32px;
+}

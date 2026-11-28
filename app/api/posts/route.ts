@@ -1,50 +1,100 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '../../../lib/prisma';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "../../../lib/prisma";
 
+// GET /api/posts -> semua postingan (terbaru di atas)
 export async function GET() {
   try {
     const posts = await prisma.post.findMany({
       include: {
-        author: { select: { name: true, username: true } },
-        comments: true,
-        likes: true,
+        author: { select: { id: true, name: true, username: true } },
+        likes: { select: { userId: true } },
+        _count: { select: { comments: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
     return NextResponse.json({ success: true, data: posts });
   } catch (error) {
-    return NextResponse.json({ success: false, error: 'Gagal memuat postingan' }, { status: 500 });
+    console.error("POSTS GET ERROR:", error);
+    return NextResponse.json(
+      { success: false, error: "Gagal memuat postingan" },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(request: Request) {
+// POST /api/posts { caption, imageUrl?, userId }
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { caption, imageUrl, username } = body;
+    const userId = Number(body.userId);
+    const caption = String(body.caption ?? "").trim();
+    const imageUrl = String(body.imageUrl ?? "").trim();
 
-    // Cari atau buat user dummy sementara jika belum login
-    let user = await prisma.user.findUnique({ where: { username: username || 'kyatmaja' } });
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          name: 'Kyatmaja Lookman',
-          username: 'kyatmaja',
-          email: 'kyatmaja@example.com',
-          password: 'password123',
-        },
-      });
+    if (!userId || !caption) {
+      return NextResponse.json(
+        { success: false, error: "Caption dan user wajib diisi" },
+        { status: 400 }
+      );
     }
 
-    const newPost = await prisma.post.create({
-      data: {
-        caption,
-        imageUrl,
-        authorId: user.id,
-      },
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "User tidak ditemukan, silakan login ulang" },
+        { status: 404 }
+      );
+    }
+
+    const post = await prisma.post.create({
+      data: { caption, imageUrl: imageUrl || null, authorId: userId },
     });
 
-    return NextResponse.json({ success: true, data: newPost }, { status: 201 });
+    return NextResponse.json({ success: true, data: post }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ success: false, error: 'Gagal membuat postingan' }, { status: 500 });
+    console.error("POSTS POST ERROR:", error);
+    return NextResponse.json(
+      { success: false, error: "Gagal membuat postingan" },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/posts?id=...&userId=1 -> hanya penulis yang boleh menghapus
+export async function DELETE(request: NextRequest) {
+  try {
+    const id = request.nextUrl.searchParams.get("id");
+    const userId = Number(request.nextUrl.searchParams.get("userId"));
+    if (!id || !userId) {
+      return NextResponse.json(
+        { success: false, error: "Data tidak lengkap" },
+        { status: 400 }
+      );
+    }
+
+    const post = await prisma.post.findUnique({
+      where: { id },
+      select: { authorId: true },
+    });
+    if (!post) {
+      return NextResponse.json(
+        { success: false, error: "Postingan tidak ditemukan" },
+        { status: 404 }
+      );
+    }
+    if (post.authorId !== userId) {
+      return NextResponse.json(
+        { success: false, error: "Hanya penulis yang bisa menghapus" },
+        { status: 403 }
+      );
+    }
+
+    await prisma.post.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("POSTS DELETE ERROR:", error);
+    return NextResponse.json(
+      { success: false, error: "Gagal menghapus postingan" },
+      { status: 500 }
+    );
   }
 }

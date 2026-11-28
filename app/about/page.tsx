@@ -19,9 +19,21 @@ const tech = [
 ];
 
 const team = [
-  { name: "Kyatmaja Lookman", role: "Pencarian, Pesan, Pengaturan, Help & About" },
-  // Tambahkan anggota tim lain di sini:
-  // { name: "Nama Teman", role: "Bagian yang dikerjakan" },
+  {
+    name: "Chalvinth Breynth",
+    nim: "535220200",
+    role: "Feed & Konten: Home Feed, Post Creation, Profile, Comments, Likes",
+  },
+  {
+    name: "Jesen Danuarta",
+    nim: "535250192",
+    role: "Autentikasi & Relasi Sosial: Login/Register, Friends, Friend Requests, Notifications, User Directory",
+  },
+  {
+    name: "Kyatmaja Lookman",
+    nim: "535269101",
+    role: "Pencarian, Pesan & Pengaturan: Search, Messages, Settings, Help, About",
+  },
 ];
 
 export default function AboutPage() {
@@ -59,11 +71,12 @@ export default function AboutPage() {
       <h3 className="fw-bold mb-3">Tim Pengembang</h3>
       <div className="row g-3">
         {team.map((m) => (
-          <div className="col-md-6 col-lg-4" key={m.name}>
-            <div className="card p-3 flex-row align-items-center gap-3">
+          <div className="col-lg-4 col-md-6" key={m.nim}>
+            <div className="card p-3 h-100 flex-row align-items-center gap-3">
               <div className="avatar">{m.name.charAt(0)}</div>
               <div>
                 <div className="fw-bold">{m.name}</div>
+                <div className="text-muted small">NIM {m.nim}</div>
                 <div className="text-muted small">{m.role}</div>
               </div>
             </div>

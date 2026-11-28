@@ -1,97 +1,132 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useCurrentUser } from "../../lib/useCurrentUser";
+
+type Post = {
+  id: string;
+  caption: string;
+  imageUrl: string | null;
+  createdAt: string;
+  author: { id: number; name: string; username: string };
+  likes: { userId: number }[];
+  _count: { comments: number };
+};
 
 export default function HomePage() {
+  const { user } = useCurrentUser();
   const [content, setContent] = useState("");
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [publishing, setPublishing] = useState(false);
 
-  const [posts, setPosts] = useState<
-    {
-      id: number;
-      name: string;
-      time: string;
-      content: string;
-      likes: number;
-      liked: boolean;
-    }[]
-  >([]);
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/posts");
+      const data = await res.json();
+      if (data.success) setPosts(data.data);
+    } catch (error) {
+      console.error("Gagal memuat postingan:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const createPost = () => {
-    if (!content.trim()) return;
+  useEffect(() => {
+    load();
+  }, [load]);
 
-    setPosts((prev) => [
-      {
-        id: Date.now(),
-        name: "You",
-        time: "Baru saja",
-        content: content.trim(),
-        likes: 0,
-        liked: false,
-      },
-      ...prev,
-    ]);
-
-    setContent("");
+  const createPost = async () => {
+    if (!user || !content.trim()) return;
+    setPublishing(true);
+    try {
+      const res = await fetch("/api/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caption: content.trim(), userId: user.id }),
+      });
+      if (res.ok) {
+        setContent("");
+        await load();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Gagal membuat postingan");
+      }
+    } finally {
+      setPublishing(false);
+    }
   };
 
-  const toggleLike = (id: number) => {
+  const toggleLike = async (postId: string) => {
+    if (!user) {
+      alert("Silakan login dulu");
+      return;
+    }
+    const userId = user.id;
+    const res = await fetch("/api/likes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId, userId }),
+    });
+    const data = await res.json();
+    if (!data.success) return;
+
     setPosts((prev) =>
-      prev.map((post) =>
-        post.id === id
+      prev.map((p) =>
+        p.id === postId
           ? {
-              ...post,
-              liked: !post.liked,
-              likes: post.liked
-                ? post.likes - 1
-                : post.likes + 1,
+              ...p,
+              likes: data.liked
+                ? [...p.likes, { userId }]
+                : p.likes.filter((l) => l.userId !== userId),
             }
-          : post
+          : p
       )
     );
   };
 
-  const deletePost = (id: number) => {
-    setPosts((prev) =>
-      prev.filter((post) => post.id !== id)
-    );
+  const deletePost = async (postId: string) => {
+    if (!user) return;
+    if (!confirm("Hapus postingan ini?")) return;
+    const res = await fetch(`/api/posts?id=${postId}&userId=${user.id}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+    } else {
+      alert("Gagal menghapus postingan");
+    }
   };
 
   const menus = [
     { icon: "🔎", name: "User Directory", href: "/users" },
     { icon: "👥", name: "Friends List", href: "/friends" },
-    { icon: "💌", name: "Friend Requests",  href: "/friend-requests" },
+    { icon: "💌", name: "Friend Requests", href: "/friend-requests" },
     { icon: "🔔", name: "Notifications", href: "/notifications" },
     { icon: "💬", name: "Messages", href: "/messages" },
+    { icon: "❤️", name: "Likes", href: "/likes" },
     { icon: "👤", name: "Profile", href: "/profile" },
   ];
 
   return (
     <div className="home-page">
       <div className="home-container">
-
         {/* Welcome Banner */}
         <div className="welcome-banner">
           <div>
-            <span className="welcome-label">
-              YOUR SOCIAL SPACE
-            </span>
-
-            <h1>Welcome to SocialConnect! 👋</h1>
-
-            <p>
-              Terhubung, berbagi cerita, dan temukan teman baru.
-            </p>
+            <span className="welcome-label">YOUR SOCIAL SPACE</span>
+            <h1>
+              Welcome{user ? `, ${user.name.split(" ")[0]}` : " to SocialConnect"}! 👋
+            </h1>
+            <p>Terhubung, berbagi cerita, dan temukan teman baru.</p>
           </div>
-
           <div className="banner-icon">💬</div>
         </div>
 
         <div className="home-grid">
-
           {/* Main Feed */}
           <main>
-
             <div className="section-heading">
               <h2>Home Feed</h2>
               <span>Latest activity</span>
@@ -99,104 +134,112 @@ export default function HomePage() {
 
             {/* Create Post */}
             <div className="social-card">
-              <div className="create-post">
-                <div className="avatar">Y</div>
+              {user ? (
+                <>
+                  <div className="create-post">
+                    <div className="avatar">{user.name.charAt(0)}</div>
+                    <textarea
+                      placeholder="Apa yang kamu pikirkan?"
+                      value={content}
+                      maxLength={500}
+                      onChange={(e) => setContent(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
 
-                <textarea
-                  placeholder="Apa yang kamu pikirkan?"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  rows={3}
-                />
-              </div>
-
-              <div className="post-actions">
-                <span className="post-label">
-                  ✨ Share your story
-                </span>
-
-                <button
-                  className="primary-button"
-                  onClick={createPost}
-                  disabled={!content.trim()}
-                >
-                  Publish Post
-                </button>
-              </div>
+                  <div className="post-actions">
+                    <Link href="/create" className="post-label">
+                      📷 Posting dengan foto
+                    </Link>
+                    <button
+                      className="primary-button"
+                      onClick={createPost}
+                      disabled={!content.trim() || publishing}
+                    >
+                      {publishing ? "Mengirim..." : "Publish Post"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p style={{ margin: 0 }}>
+                  Kamu belum login. <Link href="/">Login dulu</Link> untuk membuat postingan.
+                </p>
+              )}
             </div>
 
+            {loading && <p className="post-label">Memuat postingan...</p>}
+
             {/* Empty Feed */}
-            {posts.length === 0 && (
+            {!loading && posts.length === 0 && (
               <div className="social-card empty-feed">
                 <div className="empty-icon">📸</div>
-
                 <h3>Belum Ada Postingan</h3>
-
-                <p>
-                  Jadilah yang pertama membagikan cerita
-                  hari ini!
-                </p>
+                <p>Jadilah yang pertama membagikan cerita hari ini!</p>
               </div>
             )}
 
             {/* Posts */}
-            {posts.map((post) => (
-              <div className="social-card" key={post.id}>
+            {posts.map((post) => {
+              const liked = !!user && post.likes.some((l) => l.userId === user.id);
+              const isMine = user?.id === post.author.id;
 
-                <div className="post-header">
-                  <div className="avatar">
-                    {post.name.charAt(0)}
+              return (
+                <div className="social-card" key={post.id}>
+                  <div className="post-header">
+                    <div className="avatar">{post.author.name.charAt(0)}</div>
+
+                    <div className="post-user">
+                      <Link href={`/profile/${post.author.username}`}>
+                        <strong>{post.author.name}</strong>
+                      </Link>
+                      <small>
+                        @{post.author.username} ·{" "}
+                        {new Date(post.createdAt).toLocaleDateString("id-ID")}
+                      </small>
+                    </div>
+
+                    {isMine && (
+                      <button
+                        className="delete-button"
+                        onClick={() => deletePost(post.id)}
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
 
-                  <div className="post-user">
-                    <strong>{post.name}</strong>
-                    <small>{post.time}</small>
+                  <p className="post-content">{post.caption}</p>
+
+                  {post.imageUrl && (
+                    <img src={post.imageUrl} alt="Post" className="post-image" />
+                  )}
+
+                  <div className="post-footer">
+                    <button
+                      className={liked ? "liked" : ""}
+                      onClick={() => toggleLike(post.id)}
+                    >
+                      {liked ? "❤️" : "🤍"} {post.likes.length} Likes
+                    </button>
+                    <Link href={`/comments/${post.id}`}>
+                      💬 {post._count.comments} Komentar
+                    </Link>
                   </div>
-
-                  <button
-                    className="delete-button"
-                    onClick={() => deletePost(post.id)}
-                  >
-                    Delete
-                  </button>
                 </div>
-
-                <p className="post-content">
-                  {post.content}
-                </p>
-
-                <div className="post-footer">
-                  <button
-                    className={post.liked ? "liked" : ""}
-                    onClick={() => toggleLike(post.id)}
-                  >
-                    {post.liked ? "❤️" : "🤍"} {post.likes} Likes
-                  </button>
-                </div>
-
-              </div>
-            ))}
+              );
+            })}
           </main>
 
           {/* Quick Menu */}
           <aside>
             <div className="social-card quick-menu">
               <h3>Quick Menu</h3>
-
               <p>Explore SocialConnect</p>
 
               {menus.map((menu) => (
-                <Link
-                  key={menu.href}
-                  href={menu.href}
-                  className="menu-link"
-                >
-                  <span className="menu-icon">
-                    {menu.icon}
-                  </span>
-
+                <Link key={menu.href} href={menu.href} className="menu-link">
+                  <span className="menu-icon">{menu.icon}</span>
                   <span>{menu.name}</span>
-
                   <span className="menu-arrow">›</span>
                 </Link>
               ))}
@@ -204,24 +247,15 @@ export default function HomePage() {
 
             <div className="social-card community-card">
               <div className="community-icon">🌎</div>
-
               <h3>Grow Your Community</h3>
-
-              <p>
-                Temukan teman baru dan mulai percakapan
-                bersama mereka.
-              </p>
-
+              <p>Temukan teman baru dan mulai percakapan bersama mereka.</p>
               <Link href="/users" className="primary-button">
                 Find Friends
               </Link>
             </div>
 
-            <div className="copyright">
-              © SocialConnect
-            </div>
+            <div className="copyright">© SocialConnect</div>
           </aside>
-
         </div>
       </div>
 
@@ -240,12 +274,7 @@ export default function HomePage() {
         }
 
         .welcome-banner {
-          background: linear-gradient(
-            120deg,
-            #7c3aed,
-            #c026d3,
-            #ec4899
-          );
+          background: linear-gradient(120deg, #7c3aed, #c026d3, #ec4899);
           color: white;
           border-radius: 24px;
           padding: 38px;
@@ -319,25 +348,22 @@ export default function HomePage() {
           align-items: flex-start;
         }
 
-        .avatar {
+        .home-page .avatar {
           width: 48px;
           height: 48px;
           min-width: 48px;
           border-radius: 50%;
-          background: linear-gradient(
-            135deg,
-            #9333ea,
-            #ec4899
-          );
+          background: linear-gradient(135deg, #9333ea, #ec4899);
           color: white;
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 20px;
           font-weight: bold;
+          text-transform: uppercase;
         }
 
-        textarea {
+        .home-page textarea {
           width: 100%;
           background: #f7f7fb;
           border: 1px solid #eeeaf4;
@@ -348,7 +374,7 @@ export default function HomePage() {
           font-size: 14px;
         }
 
-        textarea:focus {
+        .home-page textarea:focus {
           border-color: #9333ea;
         }
 
@@ -363,15 +389,12 @@ export default function HomePage() {
         .post-label {
           font-size: 13px;
           color: #777;
+          text-decoration: none;
         }
 
         .primary-button {
           display: inline-block;
-          background: linear-gradient(
-            120deg,
-            #9333ea,
-            #ec4899
-          );
+          background: linear-gradient(120deg, #9333ea, #ec4899);
           border: none;
           border-radius: 12px;
           padding: 12px 20px;
@@ -484,13 +507,6 @@ export default function HomePage() {
 
         .community-card .primary-button {
           display: block;
-          background: linear-gradient(120deg, #9333ea, #ec4899);
-          color: white;
-          border-radius: 12px;
-          padding: 12px 20px;
-          text-decoration: none;
-          font-weight: bold;
-          font-size: 14px;
         }
 
         .copyright {
@@ -509,6 +525,11 @@ export default function HomePage() {
           flex: 1;
         }
 
+        .post-user a {
+          color: #202033;
+          text-decoration: none;
+        }
+
         .post-user small {
           display: block;
           color: #999;
@@ -516,15 +537,27 @@ export default function HomePage() {
         }
 
         .post-content {
-          padding: 20px 0;
+          padding: 20px 0 14px;
+          margin: 0;
           line-height: 1.7;
           white-space: pre-wrap;
           overflow-wrap: anywhere;
         }
 
+        .post-image {
+          width: 100%;
+          max-height: 420px;
+          object-fit: cover;
+          border-radius: 14px;
+          margin-bottom: 16px;
+        }
+
         .post-footer {
           border-top: 1px solid #eee;
           padding-top: 15px;
+          display: flex;
+          align-items: center;
+          gap: 22px;
         }
 
         .post-footer button,
@@ -534,6 +567,16 @@ export default function HomePage() {
           color: #777;
           cursor: pointer;
           font-size: 14px;
+        }
+
+        .post-footer a {
+          color: #777;
+          font-size: 14px;
+          text-decoration: none;
+        }
+
+        .post-footer a:hover {
+          color: #9333ea;
         }
 
         .post-footer .liked {

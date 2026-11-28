@@ -23,6 +23,7 @@ export default function Navbar() {
     { icon: "⚙️", name: "Settings", href: "/settings" },
     { icon: "❓", name: "Help", href: "/help" },
     { icon: "ℹ️", name: "About", href: "/about" },  
+    { icon: "❤️", name: "Likes", href: "/likes" },
   ];
 
   const handleLogout = () => {
@@ -59,7 +60,10 @@ export default function Navbar() {
               href={menu.href}
               onClick={() => setMenuOpen(false)}
               className={`menu-item ${
-                pathname === menu.href ? "active" : ""
+                pathname === menu.href ||
+                (menu.href !== "/home" && pathname.startsWith(menu.href + "/"))
+                  ? "active"
+                  : ""
               }`}
             >
               <span className="menu-icon">
@@ -233,7 +237,7 @@ export default function Navbar() {
           cursor: pointer;
         }
 
-        @media (max-width: 1700px) {
+        @media (max-width: 1350px) {
           .navbar-container {
             justify-content: space-between;
             flex-wrap: wrap;
