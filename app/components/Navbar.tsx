@@ -20,6 +20,9 @@ export default function Navbar() {
     { icon: "💬", name: "Messages", href: "/messages" },
     { icon: "🔎", name: "Search", href: "/search" },
     { icon: "👤", name: "Profile", href: "/profile" },
+    { icon: "⚙️", name: "Settings", href: "/settings" },
+    { icon: "❓", name: "Help", href: "/help" },
+    { icon: "ℹ️", name: "About", href: "/about" },  
   ];
 
   const handleLogout = () => {
@@ -230,7 +233,7 @@ export default function Navbar() {
           cursor: pointer;
         }
 
-        @media (max-width: 1350px) {
+        @media (max-width: 1700px) {
           .navbar-container {
             justify-content: space-between;
             flex-wrap: wrap;

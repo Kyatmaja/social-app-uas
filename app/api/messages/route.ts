@@ -1,42 +1,97 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '../../../lib/prisma';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "../../../lib/prisma";
 
-export async function GET() {
+// GET /api/messages?userId=1  -> semua pesan milik user + daftar kontak
+export async function GET(request: NextRequest) {
   try {
-    const messages = await prisma.message.findMany({
-      include: {
-        sender: { select: { name: true, username: true } },
-        receiver: { select: { name: true, username: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-    return NextResponse.json({ success: true, data: messages });
+    const userId = Number(request.nextUrl.searchParams.get("userId"));
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: "userId wajib diisi" },
+        { status: 400 }
+      );
+    }
+
+    const [messages, contacts] = await Promise.all([
+      prisma.message.findMany({
+        where: { OR: [{ senderId: userId }, { receiverId: userId }] },
+        select: {
+          id: true,
+          senderId: true,
+          receiverId: true,
+          content: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.user.findMany({
+        where: { id: { not: userId } },
+        select: { id: true, name: true, username: true },
+        orderBy: { name: "asc" },
+        take: 100,
+      }),
+    ]);
+
+    return NextResponse.json({ success: true, messages, contacts });
   } catch (error) {
-    return NextResponse.json({ success: false, error: 'Gagal memuat pesan' }, { status: 500 });
+    console.error("MESSAGES GET ERROR:", error);
+    return NextResponse.json(
+      { success: false, error: "Gagal memuat pesan" },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(request: Request) {
+// POST /api/messages  { senderId, receiverId, content }
+export async function POST(request: NextRequest) {
   try {
-    const { senderUsername, receiverUsername, content } = await request.json();
+    const body = await request.json();
+    const senderId = Number(body.senderId);
+    const receiverId = Number(body.receiverId);
+    const content = String(body.content ?? "").trim();
 
-    const sender = await prisma.user.findUnique({ where: { username: senderUsername } });
-    const receiver = await prisma.user.findUnique({ where: { username: receiverUsername } });
+    if (!senderId || !receiverId || !content) {
+      return NextResponse.json(
+        { success: false, error: "Data pesan tidak lengkap" },
+        { status: 400 }
+      );
+    }
+    if (senderId === receiverId) {
+      return NextResponse.json(
+        { success: false, error: "Tidak bisa mengirim pesan ke diri sendiri" },
+        { status: 400 }
+      );
+    }
 
+    const [sender, receiver] = await Promise.all([
+      prisma.user.findUnique({ where: { id: senderId } }),
+      prisma.user.findUnique({ where: { id: receiverId } }),
+    ]);
     if (!sender || !receiver) {
-      return NextResponse.json({ success: false, error: 'User tidak ditemukan' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: "Pengguna tidak ditemukan" },
+        { status: 404 }
+      );
     }
 
     const message = await prisma.message.create({
+      data: { senderId, receiverId, content },
+    });
+
+    // Notifikasi untuk penerima (memakai model Notification milik tim)
+    await prisma.notification.create({
       data: {
-        senderId: sender.id,
-        receiverId: receiver.id,
-        content,
+        userId: receiverId,
+        content: `Pesan baru dari @${sender.username}`,
       },
     });
 
     return NextResponse.json({ success: true, data: message }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ success: false, error: 'Gagal mengirim pesan' }, { status: 500 });
+    console.error("MESSAGES POST ERROR:", error);
+    return NextResponse.json(
+      { success: false, error: "Gagal mengirim pesan" },
+      { status: 500 }
+    );
   }
 }

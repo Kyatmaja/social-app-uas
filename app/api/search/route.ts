@@ -1,50 +1,52 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '../../../lib/prisma';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "../../../lib/prisma";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const q = (request.nextUrl.searchParams.get("q") || "").trim();
+
+    const users = await prisma.user.findMany({
+      where: q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { username: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {},
+      select: { id: true, name: true, username: true, bio: true },
+      orderBy: { name: "asc" },
+      take: 20,
+    });
+
     const posts = await prisma.post.findMany({
-      include: {
+      where: q
+        ? {
+            OR: [
+              { caption: { contains: q, mode: "insensitive" } },
+              { author: { username: { contains: q, mode: "insensitive" } } },
+              { author: { name: { contains: q, mode: "insensitive" } } },
+            ],
+          }
+        : {},
+      select: {
+        id: true,
+        caption: true,
+        imageUrl: true,
+        createdAt: true,
         author: { select: { name: true, username: true } },
-        comments: true,
-        likes: true,
+        _count: { select: { likes: true, comments: true } },
       },
-      orderBy: { createdAt: 'desc' },
-    });
-    return NextResponse.json({ success: true, data: posts });
-  } catch (error) {
-    return NextResponse.json({ success: false, error: 'Gagal memuat postingan' }, { status: 500 });
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { caption, imageUrl, username } = body;
-
-    // Cari atau buat user dummy sementara jika belum login
-    let user = await prisma.user.findUnique({ where: { username: username || 'kyatmaja' } });
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          name: 'Kyatmaja Lookman',
-          username: 'kyatmaja',
-          email: 'kyatmaja@example.com',
-          password: 'password123',
-        },
-      });
-    }
-
-    const newPost = await prisma.post.create({
-      data: {
-        caption,
-        imageUrl,
-        authorId: user.id,
-      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
     });
 
-    return NextResponse.json({ success: true, data: newPost }, { status: 201 });
+    return NextResponse.json({ success: true, users, posts });
   } catch (error) {
-    return NextResponse.json({ success: false, error: 'Gagal membuat postingan' }, { status: 500 });
+    console.error("SEARCH ERROR:", error);
+    return NextResponse.json(
+      { success: false, error: "Gagal melakukan pencarian" },
+      { status: 500 }
+    );
   }
 }
