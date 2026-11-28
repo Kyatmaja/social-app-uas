@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 type User = {
   id: number;
@@ -8,6 +9,13 @@ type User = {
   username: string;
   bio: string | null;
   createdAt: string;
+};
+
+type FriendRequest = {
+  id: string;
+  senderId: number;
+  receiverId: number;
+  status: string;
 };
 
 const colors = [
@@ -21,67 +29,183 @@ const colors = [
 
 export default function UserDirectoryPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [requests, setRequests] = useState<FriendRequest[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
-  const [pending, setPending] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
+  // Mengambil data pengguna dan permintaan
   useEffect(() => {
     const controller = new AbortController();
 
-    fetch("/api/users", {
-      signal: controller.signal,
-      cache: "no-store",
-    })
-      .then(async (res) => {
-        const data = await res.json();
+    async function loadData() {
+      try {
+        const [usersRes, requestsRes] = await Promise.all([
+          fetch("/api/users", {
+            cache: "no-store",
+            signal: controller.signal,
+          }),
+          fetch("/api/friend-requests", {
+            cache: "no-store",
+            signal: controller.signal,
+          }),
+        ]);
 
-        if (!res.ok || !data.success) {
+        const usersData = await usersRes.json();
+        const requestsData = await requestsRes.json();
+
+        if (!usersRes.ok || !usersData.success) {
           throw new Error(
-            data.message || "Failed to load users"
+            usersData.message || "Gagal mengambil pengguna"
           );
         }
 
-        return data.data as User[];
-      })
-      .then((data) => {
-        if (!controller.signal.aborted) {
-          setUsers(data);
+        if (!requestsRes.ok || !requestsData.success) {
+          throw new Error(
+            requestsData.message || "Silakan login kembali"
+          );
         }
-      })
-      .catch((err) => {
+
         if (!controller.signal.aborted) {
-          setError(err.message);
+          setUsers(usersData.data);
+          setRequests(requestsData.data);
+          setCurrentUserId(requestsData.userId);
         }
-      })
-      .finally(() => {
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Terjadi kesalahan"
+          );
+        }
+      } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
         }
-      });
+      }
+    }
+
+    loadData();
 
     return () => controller.abort();
   }, []);
 
-  const filteredUsers = users.filter(
+  // Mengambil ulang status pertemanan
+  const refreshRequests = async () => {
+    const res = await fetch("/api/friend-requests", {
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || "Gagal mengambil status");
+    }
+
+    setRequests(data.data);
+  };
+
+  // Mengirim Friend Request
+  const sendRequest = async (receiverId: number) => {
+    setBusy(receiverId);
+    setError("");
+    setMessage("");
+
+    try {
+      const res = await fetch("/api/friend-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ receiverId }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message);
+      }
+
+      await refreshRequests();
+
+      setMessage("Friend request successfully sent!");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Gagal mengirim permintaan"
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Membatalkan Friend Request
+  const cancelRequest = async (
+    requestId: string,
+    receiverId: number
+  ) => {
+    setBusy(receiverId);
+    setError("");
+    setMessage("");
+
+    try {
+      const res = await fetch("/api/friend-requests", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: requestId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message);
+      }
+
+      await refreshRequests();
+
+      setMessage("Friend request cancelled.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Gagal membatalkan permintaan"
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Menyembunyikan akun sendiri
+  const otherUsers = users.filter(
+    (user) => user.id !== currentUserId
+  );
+
+  // Pencarian pengguna
+  const filteredUsers = otherUsers.filter(
     (user) =>
       user.name.toLowerCase().includes(search.toLowerCase()) ||
       user.username.toLowerCase().includes(search.toLowerCase())
   );
 
-  const toggleRequest = (id: number) => {
-    setPending((prev) =>
-      prev.includes(id)
-        ? prev.filter((item) => item !== id)
-        : [...prev, id]
-    );
-  };
+  // Menghitung permintaan yang dikirim
+  const pendingCount = requests.filter(
+    (request) =>
+      request.senderId === currentUserId &&
+      request.status === "PENDING"
+  ).length;
 
   return (
-    <div
-      className="container py-4"
-      style={{ maxWidth: 1100 }}
-    >
+    <div className="container py-4" style={{ maxWidth: 1100 }}>
+
       {/* Banner */}
       <div
         className="rounded-4 p-4 p-md-5 text-white mb-4"
@@ -90,12 +214,10 @@ export default function UserDirectoryPage() {
             "linear-gradient(135deg, #9333ea, #ec4899)",
         }}
       >
-        <h1 className="fw-bold">
-          🌐 User Directory
-        </h1>
+        <h1 className="fw-bold">🌐 User Directory</h1>
 
         <p className="mb-0">
-          Discover people on SocialConnect.
+          Discover people and make new friends.
         </p>
       </div>
 
@@ -104,9 +226,8 @@ export default function UserDirectoryPage() {
         <div className="col-6">
           <div className="card border-0 shadow-sm p-3 text-center">
             <h2 className="fw-bold text-primary">
-              {users.length}
+              {otherUsers.length}
             </h2>
-
             <small>Total Users</small>
           </div>
         </div>
@@ -114,9 +235,8 @@ export default function UserDirectoryPage() {
         <div className="col-6">
           <div className="card border-0 shadow-sm p-3 text-center">
             <h2 className="fw-bold text-warning">
-              {pending.length}
+              {pendingCount}
             </h2>
-
             <small>Pending Requests</small>
           </div>
         </div>
@@ -134,35 +254,42 @@ export default function UserDirectoryPage() {
         />
       </div>
 
-      {/* Loading */}
-      {loading && (
-        <div className="text-center py-5">
-          <div
-            className="spinner-border text-primary"
-            role="status"
-          />
+      {/* Success Message */}
+      {message && (
+        <div className="alert alert-success">
+          {message}
 
-          <p className="mt-3 text-muted">
-            Loading users...
-          </p>
+          <button
+            className="btn-close float-end"
+            aria-label="Close"
+            onClick={() => setMessage("")}
+          />
         </div>
       )}
 
-      {/* Error */}
+      {/* Error Message */}
       {error && (
         <div className="alert alert-danger">
           {error}
 
           <button
-            className="btn btn-outline-danger ms-3"
-            onClick={() => window.location.reload()}
-          >
-            Retry
-          </button>
+            className="btn-close float-end"
+            aria-label="Close"
+            onClick={() => setError("")}
+          />
         </div>
       )}
 
-      {!loading && !error && (
+      {/* Loading */}
+      {loading ? (
+        <div className="text-center py-5">
+          <div className="spinner-border text-primary" />
+
+          <p className="mt-3 text-muted">
+            Loading users...
+          </p>
+        </div>
+      ) : (
         <>
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h4 className="fw-bold mb-0">
@@ -176,7 +303,35 @@ export default function UserDirectoryPage() {
 
           <div className="row g-3">
             {filteredUsers.map((user) => {
-              const isPending = pending.includes(user.id);
+
+              // Memeriksa hubungan pertemanan
+              const relationship = requests.find(
+                (request) =>
+                  (
+                    (
+                      request.senderId === currentUserId &&
+                      request.receiverId === user.id
+                    ) ||
+                    (
+                      request.receiverId === currentUserId &&
+                      request.senderId === user.id
+                    )
+                  ) &&
+                  ["PENDING", "ACCEPTED"].includes(
+                    request.status
+                  )
+              );
+
+              const isFriend =
+                relationship?.status === "ACCEPTED";
+
+              const isPending =
+                relationship?.status === "PENDING" &&
+                relationship.senderId === currentUserId;
+
+              const incomingRequest =
+                relationship?.status === "PENDING" &&
+                relationship.receiverId === currentUserId;
 
               return (
                 <div
@@ -184,6 +339,7 @@ export default function UserDirectoryPage() {
                   className="col-12 col-sm-6 col-lg-4"
                 >
                   <div className="card border-0 shadow-sm h-100 p-4 text-center">
+
                     {/* Avatar */}
                     <div
                       className="rounded-circle mx-auto d-flex align-items-center justify-content-center text-white fw-bold mb-3"
@@ -198,22 +354,18 @@ export default function UserDirectoryPage() {
                       {user.name.charAt(0).toUpperCase()}
                     </div>
 
-                    {/* Name */}
                     <h5 className="fw-bold mb-1">
                       {user.name}
                     </h5>
 
-                    {/* Username */}
                     <p className="text-muted mb-2">
                       @{user.username}
                     </p>
 
-                    {/* Bio */}
                     <p className="text-muted mb-3">
                       {user.bio || "No bio yet."}
                     </p>
 
-                    {/* Join Date */}
                     <small className="text-muted mb-4">
                       Joined{" "}
                       {new Date(
@@ -221,42 +373,69 @@ export default function UserDirectoryPage() {
                       ).toLocaleDateString("en-GB")}
                     </small>
 
-                    {/* Add Friend */}
-                    <button
-                      className={`btn w-100 mt-auto ${
-                        isPending
-                          ? "btn-outline-secondary"
-                          : "text-white"
-                      }`}
-                      style={
-                        isPending
-                          ? {}
-                          : {
-                              background:
-                                "linear-gradient(135deg, #9333ea, #ec4899)",
-                              border: "none",
-                            }
-                      }
-                      onClick={() =>
-                        toggleRequest(user.id)
-                      }
-                    >
-                      {isPending
-                        ? "⏳ Pending — Cancel"
-                        : "＋ Add Friend"}
-                    </button>
+                    {/* Friend Status */}
+                    {isFriend ? (
+                      <button
+                        className="btn btn-success w-100 mt-auto"
+                        disabled
+                      >
+                        ✓ Friends
+                      </button>
+
+                    ) : isPending && relationship ? (
+                      <button
+                        className="btn btn-outline-secondary w-100 mt-auto"
+                        disabled={busy !== null}
+                        onClick={() =>
+                          cancelRequest(
+                            relationship.id,
+                            user.id
+                          )
+                        }
+                      >
+                        {busy === user.id
+                          ? "Processing..."
+                          : "⏳ Pending — Cancel"}
+                      </button>
+
+                    ) : incomingRequest ? (
+                      <Link
+                        href="/friend-requests"
+                        className="btn btn-warning w-100 mt-auto"
+                      >
+                        💌 Respond to Request
+                      </Link>
+
+                    ) : (
+                      <button
+                        className="btn text-white w-100 mt-auto"
+                        disabled={
+                          busy !== null ||
+                          currentUserId === null
+                        }
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #9333ea, #ec4899)",
+                          border: "none",
+                        }}
+                        onClick={() =>
+                          sendRequest(user.id)
+                        }
+                      >
+                        {busy === user.id
+                          ? "Sending..."
+                          : "+ Add Friend"}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Empty */}
           {filteredUsers.length === 0 && (
             <div className="card border-0 shadow-sm p-5 text-center">
-              <div style={{ fontSize: 55 }}>
-                🔍
-              </div>
+              <div style={{ fontSize: 55 }}>🔍</div>
 
               <h4>No Users Found</h4>
 

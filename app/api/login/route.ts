@@ -1,6 +1,7 @@
 import { prisma } from "../../../lib/prisma";
 import bcrypt from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
+import { SignJWT } from "jose";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,8 +16,8 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: {
-        email: email.toLowerCase()
-      }
+        email: email.toLowerCase(),
+      },
     });
 
     if (!user) {
@@ -38,15 +39,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret) {
+      throw new Error("JWT_SECRET belum tersedia");
+    }
+
+    const token = await new SignJWT({
+      userId: user.id,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("7d")
+      .sign(new TextEncoder().encode(secret));
+
+    const response = NextResponse.json({
       message: "Login berhasil",
       user: {
         id: user.id,
         name: user.name,
         username: user.username,
-        email: user.email
-      }
+        email: user.email,
+      },
     });
+
+    response.cookies.set("session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
+
+    return response;
+
   } catch (error) {
     console.error("LOGIN ERROR:", error);
 
