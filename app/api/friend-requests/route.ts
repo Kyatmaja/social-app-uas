@@ -4,7 +4,7 @@ import { getCurrentUserId } from "../../../lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// Mengambil permintaan pertemanan
+// GET: Mengambil permintaan pertemanan
 export async function GET() {
   try {
     const userId = await getCurrentUserId();
@@ -59,7 +59,7 @@ export async function GET() {
   }
 }
 
-// Mengirim permintaan pertemanan
+// POST: Mengirim permintaan pertemanan
 export async function POST(request: Request) {
   try {
     const senderId = await getCurrentUserId();
@@ -89,7 +89,12 @@ export async function POST(request: Request) {
       select: { id: true },
     });
 
-    if (!receiver) {
+    const sender = await prisma.user.findUnique({
+      where: { id: senderId },
+      select: { name: true },
+    });
+
+    if (!receiver || !sender) {
       return NextResponse.json(
         { success: false, message: "Pengguna tidak ditemukan" },
         { status: 404 }
@@ -115,13 +120,25 @@ export async function POST(request: Request) {
 
         if (existing) return null;
 
-        return tx.friendRequest.create({
+        // Membuat friend request
+        const friendRequest = await tx.friendRequest.create({
           data: {
             senderId,
             receiverId,
             status: "PENDING",
           },
         });
+
+        // Membuat notifikasi untuk penerima
+        await tx.notification.create({
+          data: {
+            userId: receiverId,
+            content: `${sender.name} sent you a friend request.`,
+            isRead: false,
+          },
+        });
+
+        return friendRequest;
       },
       { isolationLevel: "Serializable" }
     );
@@ -151,7 +168,7 @@ export async function POST(request: Request) {
   }
 }
 
-// Accept dan Decline
+// PATCH: Accept dan Decline
 export async function PATCH(request: Request) {
   try {
     const userId = await getCurrentUserId();
@@ -175,16 +192,50 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const updated = await prisma.friendRequest.updateMany({
-      where: {
-        id,
-        receiverId: userId,
-        status: "PENDING",
-      },
-      data: { status },
+    const updated = await prisma.$transaction(async (tx) => {
+      const friendRequest = await tx.friendRequest.findFirst({
+        where: {
+          id,
+          receiverId: userId,
+          status: "PENDING",
+        },
+        include: {
+          receiver: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (!friendRequest) return false;
+
+      const result = await tx.friendRequest.updateMany({
+        where: {
+          id,
+          receiverId: userId,
+          status: "PENDING",
+        },
+        data: { status },
+      });
+
+      if (!result.count) return false;
+
+      // Membuat notifikasi jika request diterima
+      if (status === "ACCEPTED") {
+        await tx.notification.create({
+          data: {
+            userId: friendRequest.senderId,
+            content: `${friendRequest.receiver.name} accepted your friend request.`,
+            isRead: false,
+          },
+        });
+      }
+
+      return true;
     });
 
-    if (!updated.count) {
+    if (!updated) {
       return NextResponse.json(
         { success: false, message: "Permintaan tidak ditemukan" },
         { status: 404 }
@@ -205,7 +256,7 @@ export async function PATCH(request: Request) {
   }
 }
 
-// Membatalkan permintaan
+// DELETE: Membatalkan permintaan
 export async function DELETE(request: Request) {
   try {
     const userId = await getCurrentUserId();
